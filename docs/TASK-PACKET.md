@@ -30,15 +30,15 @@ Return: status, changed paths, commands + cwd + exit status + short evidence,
 默认共享当前工作目录，单写入者；不要假设模型隔离自动提供文件隔离。
 如果未来启用独立 worktree，另行设计整合/冲突处理和生命周期，不能直接沿用共享目录的成功判定。
 
-## PLAN_ONLY 两阶段规划（省 Opus）
+## PLAN_ONLY 两阶段规划（省 Claude 额度）
 
-需要深度规划但希望压缩 Opus 消耗时，在 Opus 会话发送 `PLAN_ONLY`。Lead 产出
+需要深度规划但希望压缩 Claude 额度消耗时，在 Claude 会话（Sonnet 4.6 或 Opus 4.6）中发送 `PLAN_ONLY`。Lead 产出
 `PLAN.md` 内容（不超过 120 行），包含：objective、compressed context、task packets
 （角色/范围/验收命令）、risks、stop conditions。Lead 本身没有写文件工具：仅允许一次
 `agy-implementer` 派发把 Lead 的原文转写成 PLAN.md（或由 Lead 在回复中输出、用户自行
 保存）；不实现、不修复、不审查。
 然后新建会话：主 Agent 仍选 `op-lead-with-us`，主模型选 Gemini 3.8 Flash，
-发送 `Execute PLAN.md`，由 Flash workers 完成执行，Opus 不接触执行日志。
+发送 `Execute PLAN.md`，由 Flash workers 完成执行，Claude 不接触执行日志。
 
 ## 回报预算
 

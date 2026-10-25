@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -42,9 +42,14 @@ export function packagePlugin() {
   const zipFile = join(outputsDir, `op-lead-with-us-${version}.zip`);
   const shaFile = join(outputsDir, `op-lead-with-us-${version}.sha256.txt`);
 
-  // 使用 PowerShell Compress-Archive 进行零依赖原生压缩
-  const psCmd = `Compress-Archive -Path '${stagedDir}\\*' -DestinationPath '${zipFile}' -Force`;
-  execFileSync('powershell.exe', ['-NoProfile', '-Command', psCmd], { stdio: 'inherit' });
+  // Cross-platform zip creation: use zip CLI on Linux/Unix, powershell on Windows if available
+  if (process.platform === 'win32') {
+    const psCmd = `Compress-Archive -Path '${stagedDir}\\*' -DestinationPath '${zipFile}' -Force`;
+    execFileSync('powershell.exe', ['-NoProfile', '-Command', psCmd], { stdio: 'inherit' });
+  } else {
+    if (existsSync(zipFile)) rmSync(zipFile, { force: true });
+    execFileSync('zip', ['-q', '-r', zipFile, '.'], { stdio: 'inherit', cwd: stagedDir });
+  }
 
   const hashValue = computeSha256(zipFile).toUpperCase();
   const shaContent = `\nAlgorithm : SHA256\nHash      : ${hashValue}\nPath      : ${zipFile}\n\n`;

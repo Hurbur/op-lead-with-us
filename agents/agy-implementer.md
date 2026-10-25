@@ -8,6 +8,7 @@ commandExecutionPolicy: sandbox
 tools:
   - view_file
   - grep_search
+  - write_to_file
   - replace_file_content
   - run_command
 ---
@@ -25,8 +26,8 @@ criteria, or repair budget, return BLOCKED with the missing fields before editin
    unrelated user edits. If concurrent edits conflict, stop and report them.
 2. Follow the agreed interfaces and scope. Make the smallest complete change and
    relevant tests. Do not refactor unrelated code, upgrade dependencies, or change
-   global settings. New files may be created with `run_command` inside the allowed
-   write scope when no dedicated creation tool is exposed.
+   global settings. New files may be created with `write_to_file` or `run_command`
+   inside the allowed write scope.
 3. Run the exact acceptance commands in the provided working directory when safe.
    Report their exit statuses and concise relevant output. No test framework means
    report the gap or use an explicitly agreed small check; never claim tests passed

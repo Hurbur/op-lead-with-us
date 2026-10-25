@@ -141,8 +141,45 @@ test('worker report budgets are required', () => {
   rewrite(root, 'agents/agy-researcher.md', s => s.replace('Report budget: 40 lines maximum.', ''));
   assert.throws(() => validatePlugin(root), /missing report budget/);
 });
-test('two-model policy is pinned in rules', () => {
+test('model policy is pinned in rules', () => {
   const root = fixture();
-  rewrite(root, 'rules/op-lead-with-us.md', s => s.replace('Only two models participate', 'Two models participate'));
-  assert.throws(() => validatePlugin(root), /two-model policy/);
+  rewrite(root, 'rules/op-lead-with-us.md', s => s.replace('Coordinator and worker models', 'Arbitrary models'));
+  assert.throws(() => validatePlugin(root), /model policy/);
+});
+test('coordinator must inherit main model and not allow direct flash assignment', () => {
+  const root = fixture();
+  rewrite(root, 'agents/op-lead-with-us.md', s => s.replace('model: inherit', 'model: flash'));
+  assert.throws(() => validatePlugin(root), /unexpected model routing/);
+});
+test('workers must strictly route to flash only', () => {
+  for (const model of ['pro', 'flash_lite']) {
+    const root = fixture();
+    rewrite(root, 'agents/agy-researcher.md', s => s.replace('model: flash', `model: ${model}`));
+    assert.throws(() => validatePlugin(root), /unexpected model routing/);
+  }
+});
+test('lead requires LEAD_CONFIG_V3 marker and LEAD_TOOLCHECK preflight', () => {
+  const root = fixture();
+  rewrite(root, 'agents/op-lead-with-us.md', s => s.replace('LEAD_CONFIG_V3', 'LEAD_CONFIG_V1'));
+  assert.throws(() => validatePlugin(root), /capability preflight/);
+});
+test('lead requires MISSING_INVOKE_TOOL and WORKER_NOT_DISCOVERED error markers', () => {
+  const root = fixture();
+  rewrite(root, 'agents/op-lead-with-us.md', s => s.replace('MISSING_INVOKE_TOOL', 'SOME_ERROR'));
+  assert.throws(() => validatePlugin(root), /distinguish capability from discovery failure/);
+});
+test('lead enforces repair cycles budget', () => {
+  const root = fixture();
+  rewrite(root, 'agents/op-lead-with-us.md', s => s.replace('repair_cycles_remaining', 'retry_attempts'));
+  assert.throws(() => validatePlugin(root), /track repairs across invocations/);
+});
+test('lead enforces worker report budgets', () => {
+  const root = fixture();
+  rewrite(root, 'agents/op-lead-with-us.md', s => s.replace('report budgets', 'unlimited reports'));
+  assert.throws(() => validatePlugin(root), /enforce worker report budgets/);
+});
+test('implementer tools must include write_to_file', () => {
+  const root = fixture();
+  rewrite(root, 'agents/agy-implementer.md', s => s.replace('  - write_to_file\n', ''));
+  assert.throws(() => validatePlugin(root), /tool capabilities changed/);
 });

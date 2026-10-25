@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, copyFileSync, cpSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -11,25 +11,54 @@ const marker = '.op-lead-with-us-installed.json';
 
 const globalConfigDir = join(homedir(), '.gemini', 'config');
 const globalPluginDir = join(globalConfigDir, 'plugins', 'op-lead-with-us');
-const legacyPluginDir = join(globalConfigDir, 'plugins', 'opus-staff');
 const globalAgentsDir = join(globalConfigDir, 'agents');
+
+function createTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function backupExistingInstallation() {
+  const timestamp = createTimestamp();
+  let backedUp = false;
+
+  // 1. Back up existing plugin directory if present
+  if (existsSync(globalPluginDir)) {
+    const pluginBackupDir = join(globalConfigDir, 'plugins', `op-lead-with-us.backup-${timestamp}`);
+    cpSync(globalPluginDir, pluginBackupDir, { recursive: true });
+    console.log(`📦 已备份现有插件目录至: ${pluginBackupDir}`);
+    backedUp = true;
+  }
+
+  // 2. Back up existing agent files if present
+  if (existsSync(globalAgentsDir)) {
+    const existingAgents = agentNames.filter(name => existsSync(join(globalAgentsDir, `${name}.md`)));
+    if (existingAgents.length > 0) {
+      const agentsBackupDir = join(globalAgentsDir, `.backup-${timestamp}`);
+      mkdirSync(agentsBackupDir, { recursive: true });
+      for (const name of existingAgents) {
+        copyFileSync(join(globalAgentsDir, `${name}.md`), join(agentsBackupDir, `${name}.md`));
+      }
+      console.log(`📦 已备份现有 Agent 文件至: ${agentsBackupDir}`);
+      backedUp = true;
+    }
+  }
+
+  return backedUp;
+}
 
 function uninstall() {
   console.log('--- op-lead-with-us 全局卸载 ---');
   let removedAny = false;
 
-  for (const dir of [globalPluginDir, legacyPluginDir]) {
-    if (existsSync(dir)) {
-      console.log(`正在移除全局插件目录: ${dir}`);
-      rmSync(dir, { recursive: true, force: true });
-      removedAny = true;
-    }
+  if (existsSync(globalPluginDir)) {
+    console.log(`正在移除全局插件目录: ${globalPluginDir}`);
+    rmSync(globalPluginDir, { recursive: true, force: true });
+    removedAny = true;
   }
 
-  // 检查并清理全局 agents 中的 lead 与 worker 副本
+  // 清理全局 agents 中的 lead 与 worker
   if (existsSync(globalAgentsDir)) {
-    const candidateNames = [...agentNames, 'opus-staff-lead'];
-    for (const name of candidateNames) {
+    for (const name of agentNames) {
       const agentFile = join(globalAgentsDir, `${name}.md`);
       if (existsSync(agentFile)) {
         console.log(`正在移除全局 Agent: ${agentFile}`);
@@ -39,28 +68,29 @@ function uninstall() {
     }
   }
 
+  // 检查是否有历史备份并告知用户
+  if (existsSync(join(globalConfigDir, 'plugins'))) {
+    const backups = readdirSync(join(globalConfigDir, 'plugins')).filter(d => d.startsWith('op-lead-with-us.backup-'));
+    if (backups.length > 0) {
+      console.log(`ℹ️ 提示: 检测到历史备份目录共 ${backups.length} 个（未自动删除，可手动清理）:`);
+      for (const b of backups) console.log(`   - ${join(globalConfigDir, 'plugins', b)}`);
+    }
+  }
+
   if (removedAny) {
-    console.log('✅ 全局卸载完成。');
+    console.log('✅ 全局卸载完成。未触碰任何其他无关配置或凭据。');
   } else {
     console.log('未检测到已安装的全局组件，无需操作。');
   }
 }
 
-function install() {
+function install(options = {}) {
   console.log('--- op-lead-with-us 全局安装 ---');
   validatePlugin(projectRoot);
   console.log('PASS 静态配置校验通过');
 
-  // 清理旧版 opus-staff 残留
-  if (existsSync(legacyPluginDir)) {
-    console.log(`清理旧版插件目录: ${legacyPluginDir}`);
-    rmSync(legacyPluginDir, { recursive: true, force: true });
-  }
-  const legacyLead = join(globalAgentsDir, 'opus-staff-lead.md');
-  if (existsSync(legacyLead)) {
-    console.log(`清理旧版 Lead Agent: ${legacyLead}`);
-    rmSync(legacyLead, { force: true });
-  }
+  // 安全检查与备份
+  backupExistingInstallation();
 
   // 1. 部署到 ~/.gemini/config/plugins/op-lead-with-us
   mkdirSync(globalPluginDir, { recursive: true });
@@ -82,12 +112,14 @@ function install() {
   );
   console.log(`✅ 插件核心已安装至: ${globalPluginDir}`);
 
-  // 2. 将 op-lead-with-us 部署到 ~/.gemini/config/agents/，确保 Antigravity 主下拉框全局可见
+  // 2. 将所有 4 个 agent (lead + 3 workers) 注册至 ~/.gemini/config/agents/，确保 Antigravity 主下拉框与子代理发现均可见
   mkdirSync(globalAgentsDir, { recursive: true });
-  const leadSrc = join(projectRoot, 'agents', 'op-lead-with-us.md');
-  const leadDest = join(globalAgentsDir, 'op-lead-with-us.md');
-  copyFileSync(leadSrc, leadDest);
-  console.log(`✅ 主 Agent 已注册至全局 Agent 列表: ${leadDest}`);
+  for (const name of agentNames) {
+    const src = join(projectRoot, 'agents', `${name}.md`);
+    const dest = join(globalAgentsDir, `${name}.md`);
+    copyFileSync(src, dest);
+    console.log(`✅ 已注册全局 Agent: ${name} -> ${dest}`);
+  }
 
   // 验证全局安装副本
   validatePlugin(globalPluginDir);
@@ -98,8 +130,10 @@ function install() {
   console.log('使用方法：');
   console.log('1. 重启或在 Antigravity 桌面端新建对话 (Ctrl+N)');
   console.log('2. Agent 选择器选择: op-lead-with-us');
-  console.log('3. 模型选择器按会话类型选择: Claude Opus 5.5（复杂规划/验收）或 Gemini 3.8 Flash（简单任务/Execute PLAN.md）');
-  console.log('4. 省额度可先在 Opus 会话 PLAN_ONLY 生成 PLAN.md，再新开 Flash 会话执行 Execute PLAN.md');
+  console.log('3. 模型选择器按会话模式选择:');
+  console.log('   - 模式 A（Claude 协调）: Claude Sonnet 4.6 Thinking（日常首选）或 Claude Opus 4.6 Thinking（复杂架构/高阶审查）');
+  console.log('   - 模式 B（省额度执行）: 在 Claude 会话 PLAN_ONLY 生成 PLAN.md，然后新建 Gemini 3.8 Flash 会话执行 Execute PLAN.md');
+  console.log('4. 所有实质代码检索、实现、测试与独立审查均由 Gemini 3.8 Flash 子 Agent 原生并发执行');
   console.log('=========================================\n');
 }
 
@@ -117,4 +151,4 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   }
 }
 
-export { install, uninstall };
+export { install, uninstall, backupExistingInstallation };

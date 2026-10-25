@@ -1,55 +1,65 @@
-# 首次运行验收
+# 首次运行验收与冒烟测试指南
 
-## 0. 安装与发现（不消耗模型请求）
+## 0. 安装与发现（零模型消耗）
 
-在工作区生成 `.agents/plugins/op-lead-with-us/` 后，用 Antigravity 2.15.1 打开本项目并新建对话。
-确认 `op-lead-with-us` 可以作主 Agent；三个 worker 是子 Agent，不应作为主 Agent 选项。
-如 UI 不单独列出 worker，以主 Agent 可用的原生委派工具是否发现它们为准。
+在工作区生成 `.agents/plugins/op-lead-with-us/`（或执行 `npm run install:global` 全局安装）后，在 Antigravity 桌面端新建对话。
+确认 `op-lead-with-us` 可以在主 Agent 选择器中选中。
+三个 worker（`agy-researcher`, `agy-implementer`, `agy-reviewer`）作为子 Agent 注册供原生委派调用。
 
-仅查看不到列表还不能证明“不支持”；但工具明确缺失时必须停止，不能改用 `self`。
-保留具体错误文本，避免盲目扩大工具权限。官方文档警告拼错工具名可能使 worker 卡住。
+## 0.1 预检 Lead 工具（LEAD_TOOLCHECK）
 
-## 0.1 先检查 Lead 工具
+在新建对话中，Agent 选择 `op-lead-with-us`，主模型选 **Claude Sonnet 4.6 Thinking**（或 Claude Opus 4.6 Thinking），发送以下预检提示：
 
-首次实测已发现会话无 invoke_subagent。现在先按 TROUBLESHOOTING.md 执行不调用任何工具的
-LEAD_TOOLCHECK，确认新 Lead 已选择且真实具备委派工具，再运行下一个步骤。
-读取 SKILL.md 不代表主 Agent 配置已生效。缺工具时不要重复消耗 Opus 做同一个冒烟。
+```text
+LEAD_TOOLCHECK。不要调用任何工具，不读文件，不创建子会话，不写代码。
+仅根据当前已注入的指令与工具 schema 回答：
+1. 当前指令中是否有 Lead 的 Instruction revision；有则原样返回，没有则写 absent。
+2. invoke_subagent、manage_subagents、send_message 各是否真的可调用。
+3. 不得用提示词里提到的工具名、文件配置或你自述的身份冒充实际可用工具。
+4. 若缺 invoke_subagent，返回 MISSING_INVOKE_TOOL 并停止。
+```
 
-## 1. 最小只读路由测试（一次 researcher）
+预期：Lead 确认 `Instruction revision: LEAD_CONFIG_V3` 存在，且 `invoke_subagent`、`manage_subagents`、`send_message` 均在可用工具声明中。
 
-选主 Agent `op-lead-with-us`，手工选择你可用的 Opus 模型。发送 README 中的
-`ROUTING_SMOKE_TEST` 提示。预期仅读取 manifest，并返回 `op-lead-with-us`。
+## 1. 最小只读路由测试（一次 researcher 调用）
+
+保持主 Agent 为 `op-lead-with-us`，向 Claude 发送：
+
+```text
+ROUTING_SMOKE_TEST。请派发一名 agy-researcher 只读读取本插件的 plugin.json 文件，
+返回其 name 字段的值。严禁修改任何文件，严禁执行命令。
+完成后由 Lead 输出验收报告，注明子任务实际运行模型是否经元数据证实（若无则标记 UNVERIFIED）。
+```
 
 验收记录：
 
-| 项目 | 预期 | 实测 |
+| 项目 | 预期 | 状态 |
 | --- | --- | --- |
-| 主 Agent / 主模型 | op-lead-with-us / 用户所选 Opus | 待填 |
-| 子 Agent | agy-researcher（可能带插件命名空间） | 待填 |
-| 子会话实际模型 | App 或工具元数据确认的 Flash 档模型 | 待填 |
-| 子会话数量 | 1 | 待填 |
-| 文件修改 | 无 | 待填 |
-| 状态 | 完成；无 hang 或 fallback | 待填 |
+| 主 Agent / 主模型 | op-lead-with-us / Claude Sonnet 4.6 (或 Opus 4.6) | 待实机记录 |
+| 子 Agent | agy-researcher | 待实机记录 |
+| 子任务实际模型 | Gemini 3.8 Flash (`model: flash`) | 待实机记录 |
+| 子任务数量 | 1 | 待实机记录 |
+| 文件改动 | 0 (无任何改动) | 待实机记录 |
+| 状态 | COMPLETE (无挂起、无异常 fallback) | 待实机记录 |
 
-不要以模型自己回答“我是 Flash”作为验证。也不要仅依据额度显示短期没变化就判断零消耗，
-额度统计可能是聚合值或延迟更新。没有可信运行元数据时标记 UNVERIFIED，用户查看子会话后再确认。
-如果账号拿不到任何模型标识，先不要扩大任务；可由用户在明确知情下决定是否继续小规模试用。
+*注：模型文本自述不能算作底层运行凭证。若无底层会话元数据，一律标为 UNVERIFIED。*
 
-## 1.5 PLAN_ONLY 两阶段冒烟（可选）
+## 1.5 PLAN_ONLY 两阶段冒烟测试（模式 B）
 
-在 Opus 会话发送 `PLAN_ONLY：为 README 增加一个安装小节并保持原有语气`。
-预期：仅创建 `PLAN.md`（≤120 行）；至多一次 implementer 原文转写，不派 researcher/reviewer，不修改其他文件。
-然后新建 Gemini 3.8 Flash 会话发送 `Execute PLAN.md`，验证执行会话零 Opus 消耗、
-worker 回报不超过预算（researcher 40 / implementer 50 / reviewer 60 行）。
+在 Claude 会话中发送：
+`PLAN_ONLY: 为一个简单的数学工具库设计加减乘除函数与单元测试结构`。
 
-## 2. 端到端小型任务
+预期：
+- 仅产出一份紧凑的 `PLAN.md`（≤120 行），通过至多一次 `agy-implementer` 原文写入或直接输出；
+- Claude 不派发 researcher/reviewer，不写实现代码，不跑测试。
+- 用户新建对话：Agent 选 `op-lead-with-us`，模型选 **Gemini 3.8 Flash**，发送 `Execute PLAN.md`，全程零 Claude 消耗。
 
-仅在路由测试成功后执行；会使用额度。不要让测试修改真实业务代码。
-先确认 `work/op-lead-with-us-smoke/` 不存在；存在则选择一个新的空目录，不清空它。
-把下列提示中的“绝对项目目录”换成你实际项目路径：
+## 2. 端到端小型任务测试
+
+在只读测试通过后，进入小型编码实机验证（建议使用新目录，如 `work/op-lead-smoke/`）：
 
 ```text
-使用 op-lead-with-us。在“绝对项目目录/work/op-lead-with-us-smoke”实现一个零依赖 Node ESM 小例子。
+使用 op-lead-with-us。在“/绝对路径/work/op-lead-smoke”实现一个零依赖 Node ESM 工具模块。
 目录必须是新目录，存在则停止询问；禁止修改该目录外的文件。
 创建 clamp.mjs，导出 clamp(value, min, max)。三个参数必须是有限数字；
 非数字、NaN、Infinity、-Infinity 抛 TypeError；min > max 抛 RangeError；
@@ -62,20 +72,12 @@ worker 回报不超过预算（researcher 40 / implementer 50 / reviewer 60 行�
 附实际执行命令、工作目录、退出码及两个子会话的实际模型证据；拿不到则标记 UNVERIFIED。
 ```
 
-预期：Lead 没有亲自写实现；Implementer 和 Reviewer 都走 Flash；测试由二者各运行一次；
-文件仅出现在授权目录。测试次数可因有证据的修复增加，修复预算不可重置。
-
-## 3. 有条件的失败测试
-
-不需要故意耗尽额度或故障注入。若真实出现以下情形，观察是否遵循预期：
-
-- Flash 不可用或额度不足：返回具体错误，不用 Opus 接管执行。
-- 子 Agent 名称未找到：返回实际注册名称/错误，不猜参数无限重试。
-- 两轮修复仍失败：列出失败证据，由用户决定是否授权进一步诊断。
-- 用户取消：停止本任务 worker；报告确认的取消状态，不能假称已停。
-- 已有用户改动：保留；冲突时请求决策，而非 reset/clean。
+预期：
+- Claude 仅做任务拆解、派发 implementer 与 reviewer，并在最后依据精简证据验收；
+- Implementer 完成 `clamp.mjs` 和 `clamp.test.mjs` 编写并运行测试；
+- Reviewer 独立复核 diff 并独立运行 `node --test clamp.test.mjs`；
+- 所有改动均严格限制在测试目录内，无外部文件污染。
 
 ## 完成标准
 
-静态校验通过 + AGY 发现成功 + 实际 worker 路由证据 + 小例子的独立测试证据，
-才可以称为完成了首轮实机验收。静态校验只验证文件结构和我们制定的配置约束。
+静态校验通过（`npm run validate`）+ 单元回归测试全通（`npm test`）+ 原生委派工具验证 + 真实子会话执行证据。

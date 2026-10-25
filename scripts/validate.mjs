@@ -12,7 +12,7 @@ export const runtimeFiles = [
   'rules/op-lead-with-us.md',
 ];
 export const packageFiles = [...runtimeFiles, 'README.md', 'docs/SMOKE-TEST.md', 'docs/TASK-PACKET.md', 'docs/COMPATIBILITY.md', 'docs/TROUBLESHOOTING.md'];
-const verifiedTools = new Set(['view_file', 'grep_search', 'replace_file_content', 'run_command', 'invoke_subagent', 'manage_subagents', 'send_message']);
+const verifiedTools = new Set(['view_file', 'grep_search', 'write_to_file', 'replace_file_content', 'run_command', 'invoke_subagent', 'manage_subagents', 'send_message']);
 export const leadToolNames = ['view_file', 'grep_search', 'invoke_subagent', 'manage_subagents', 'send_message'];
 
 // Deliberately supports only this project's simple YAML subset, not arbitrary YAML.
@@ -96,7 +96,7 @@ export function validatePlugin(root = projectRoot) {
     for (const tool of m.tools) assert(verifiedTools.has(tool), `${name}: unverified tool ${tool}`);
     if (!lead) {
       const expected = name === 'agy-researcher' ? ['view_file', 'grep_search']
-        : name === 'agy-implementer' ? ['view_file', 'grep_search', 'replace_file_content', 'run_command']
+        : name === 'agy-implementer' ? ['view_file', 'grep_search', 'write_to_file', 'replace_file_content', 'run_command']
         : ['view_file', 'grep_search', 'run_command'];
       assert.deepEqual(m.tools, expected, `${name}: tool capabilities changed`);
       assert(body.includes('UNVERIFIED'), `${name}: missing runtime model caveat`);
@@ -104,7 +104,7 @@ export function validatePlugin(root = projectRoot) {
       assert(body.includes(`Report budget: ${budget} lines maximum`), `${name}: missing report budget`);
     } else {
       assert.deepEqual(m.tools, leadToolNames, 'Lead must explicitly request delegation, lifecycle and read tools');
-      assert(body.includes('LEAD_CONFIG_V2') && body.includes('LEAD_TOOLCHECK'), 'Lead must expose a capability preflight');
+      assert(body.includes('LEAD_CONFIG_V3') && body.includes('LEAD_TOOLCHECK'), 'Lead must expose a capability preflight');
       assert(body.includes('MISSING_INVOKE_TOOL') && body.includes('WORKER_NOT_DISCOVERED'), 'Lead must distinguish capability from discovery failure');
       for (const worker of agentNames.filter(n => n !== name)) assert(body.includes(worker), `Lead does not refer to ${worker}`);
       assert(body.includes('repair_cycles_remaining') && body.includes('repair_cycles_used'), 'Lead must track repairs across invocations');
@@ -129,9 +129,9 @@ export function validatePlugin(root = projectRoot) {
   assert.equal(typeof rule.metadata.description, 'string');
   assert(readFileSync(rulePath).byteLength < 24000, 'Rule exceeds documented per-file size limit');
   assert(rule.body.includes('Otherwise do not alter'), 'Rule must not hijack unrelated conversations');
-  assert(rule.body.includes('Only two models participate') && rule.body.includes('PLAN_ONLY'), 'Rule must pin the two-model policy and PLAN_ONLY');
+  assert(rule.body.includes('Coordinator and worker models') && rule.body.includes('PLAN_ONLY'), 'Rule must pin the model policy and PLAN_ONLY');
   checks.push('rule: valid activation and limited scope');
-  checks.push('cost controls: two-model policy, PLAN_ONLY and report budgets');
+  checks.push('cost controls: model policy, PLAN_ONLY and report budgets');
 
   for (const forbidden of ['hooks.json', 'mcp_config.json']) assert(!existsSync(join(root, forbidden)), `MVP must not silently introduce ${forbidden}`);
   checks.push('no hooks, external MCP or automatic model API');

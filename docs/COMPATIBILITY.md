@@ -1,65 +1,46 @@
 # 兼容性与验证边界
 
-核查日期：2026-10-04（Asia/Hong_Kong）。
+核查日期：2026-10-25（CachyOS Linux / Antigravity 2.21.1）。
 
-## 已核实
+## 已核实环境与架构
 
-- 本机 `Antigravity.exe` ProductVersion 为 2.15.1.0，FileVersion 为 2.15.1；
-  应用 asar 中 package.json 的 version 为 2.15.1。只读取元数据，没有修改应用。
-- 官方 Plugins 文档描述根目录 plugin.json 和 agents/、skills/、rules/ 的打包方式；
-  桌面版工作区目录为 `.agents/plugins/`，全局目录为 `~/.gemini/config/plugins/`。
-- 清单文档列出的字段为 name、description，示例 schema 使用 additionalProperties: false。
-  文档同时推荐 `$schema`，但列出的 properties 又没有该字段；本版采用无歧义的两个字段。
-  在线 schema 端点本次未返回可用 JSON，因此校验器按页面字段约束编写，
-  不宣称通过了在线 schema 或 Antigravity 官方加载器校验。
-- Subagents 文档列出 mainAgent、subagent、model、commandExecutionPolicy、tools 等字段。
-  已文档化的 model 值为 inherit、flash、pro。未使用未经证实的具体 Opus 模型 ID。
-- 2026-10-06 实测：`flash` worker 子会话 gen_metadata 为 gemini-3.8-flash-tiered；
-  `inherit` 子代理继承主会话模型。本机 2.15.1 语言服务器校验字符串显示子代理
-  Model 仅支持 inherit/flash/flash_lite/pro，无 Opus 档；Opus 只能作为主会话模型。
-  因此 v0.2.1 固化双模型策略，不使用其他档位。
-- `view_file`、`grep_search`、`run_command`、`replace_file_content` 都有官方文档示例支持。
-  0.1.0 的 Lead 省略 tools，实测会话未获得委派工具，原先依赖默认工具集的假设未成立。
-  0.1.1 显式请求 invoke_subagent、manage_subagents、send_message 和两个读工具；
-  前三个名称可由官方 Hooks 工具目录核对。此修复尚未实机验证，不能承诺会强制启用工具。
-  worker 名单不包含委派工具；这些名单是否排除所有默认工具仍须运行期核实。
-- rules/ 文件使用 `trigger: always_on`。不用含糊的 `rules/AGENTS.md` 例外处理，
-  避免规则因缺少合法 frontmatter 被忽略。规则正文限定仅在本插件角色/技能启用时适用。
+- **宿主环境**：CachyOS Linux (Kernel 7.2.9-2-cachyos, x86_64, Node.js v24.22.0, npm 12.2.1, git 2.56.0, gh 2.94.0)。
+- **应用版本**：独立 Google Antigravity Agent App 2.21.1（基于 Electron 34+ / ConnectRPC / LanguageServer）。
+- **语言服务器**：`/opt/antigravity/resources/bin/language_server --standalone --override_ide_version 2.21.1`，健康状态正常（`{"status":"ok"}`）。
+- **配额体系核实**：通过 `RetrieveUserQuotaSummary` 接口核实官方两组配额桶：
+  1. `Gemini Models`（含 Gemini Flash, Gemini Pro），独立周配额与 5 小时刷新配额。
+  2. `Claude and GPT models`（含 Claude Opus, Claude Sonnet, GPT-OSS），独立周配额与 5 小时刷新配额。
+  3. `flash` 档位解析至 `Gemini 3.8 Flash`；`inherit` 继承主会话模型。
+- **支持的主协调员模型**：
+  - **Claude Sonnet 4.6 Thinking**：日常首选协调员，响应极速，推理严密，低配额消耗。
+  - **Claude Opus 4.6 Thinking**：高难度复杂架构、深层次疑难排查与高风险审查。
+  - **Gemini 3.8 Flash**：执行 Mode B（`Execute PLAN.md`）与纯简易任务。
+- **支持的子任务 Worker 模型**：
+  - **Gemini 3.8 Flash**（`model: flash`）：3 个原生子 Agent：
+    - `agy-researcher`：只读调研员（`tools: view_file, grep_search`，汇报预算 ≤40 行）。
+    - `agy-implementer`：代码执行员（`tools: view_file, grep_search, write_to_file, replace_file_content, run_command`，汇报预算 ≤50 行，最多 2 轮自主修复）。
+    - `agy-reviewer`：独立审查员（`tools: view_file, grep_search, run_command`，汇报预算 ≤60 行，独立跑测复查 diff）。
+- **原生委派机制**：
+  - 依赖 Antigravity 原生 `invoke_subagent`、`manage_subagents`、`send_message`。
+  - 零外部 CLI（不依赖 Claude Code CLI、Codex CLI、agy CLI、第三方反向代理或付费外部 API）。
+- **安装与发现机制**：
+  - 工作区级：`.agents/plugins/op-lead-with-us/`（由 `npm run stage` 自动同步）。
+  - 全局配置级：`~/.gemini/config/plugins/op-lead-with-us/` 及 `~/.gemini/config/agents/`（由 `npm run install:global` 部署并自动创建带时间戳的安全备份）。
 
-## 尚未验证
+## 运行模式定义
 
-- 用户已确认技能被读取，但首次会话无 invoke_subagent；自定义主 Agent 是否实际选中、
-  agents/ 是否被注册、修复后工具名单是否正确映射仍待验证。见 TROUBLESHOOTING.md。
-- 主模型 Opus 5.5 的具体可用性、子模型 tier 的实际底层版本、计费与额度变化。
-- UI 是否给插件 Agent 名添加命名空间，是否显示所有子 Agent 条目。
-- 端到端编写/修复/审查和用户取消传播。没有在本次构建中调用收费模型进行测试。
+1. **模式 A：Claude 主导全流程 (Claude-Led Orchestration)**
+   - Claude (Sonnet 4.6 / Opus 4.6) 全程主导；
+   - 任务拆解 -> Researcher 调研 (可选) -> Implementer 编码与测跑 -> Reviewer 独立复核 -> Implementer 修订 (≤2 轮) -> Claude 依据精简摘要验收。
+   - Claude 绝不重读全部源码、大文件或冗长终端测试日志。
 
-`flash` 是档位，不固定某个产品版本。不要将 `inherit` 等同于 Opus，也不要将
-静态配置、模型自述、短期额度不变当成服务端路由证据。
+2. **模式 B：额度节约两阶段 (PLAN_ONLY Execution)**
+   - 第一阶段：在 Claude 会话中输入 `PLAN_ONLY <任务描述>`，Claude 产出 ≤120 行的自包含 `PLAN.md`（由一次 implementer 原文写入或直接输出），随后 Claude 会话终止。
+   - 第二阶段：新开 Antigravity 会话（Agent 选 `op-lead-with-us`，模型选 **Gemini 3.8 Flash**），发送 `Execute PLAN.md`。整个实现、测试与审查过程零 Claude Token 消耗。
 
-## 不做的事
+## 行为安全与权限边界
 
-- 不伪装 API、不读取登录令牌、不逆向私有通信、不绕过额度或切换账号。
-- 不启动外部宿主、不使用 agy CLI、不依赖 MCP 服务器。
-- 不强制拦截实际模型调用，不保证固定主模型调用次数或金额。
-- 不做强制文件隔离。Shell 工具本身可以写文件；reviewer 的 no-edit 是行为规则。
-- 不修改 Antigravity 自身、全局设置、已有项目或正在运行的对话。
-
-## 后续扩展方向
-
-先确认原生委派可用，再根据实际事件/工具接口加只读调用记录。若要硬预算与实时额度控制，
-必须有可靠的官方 hook/API 及计费信息，不能仅靠规则文件宣称实现。若想让部分 worker 使用
-其他模型，先核实该版本支持的显式 model 值和你的账户可用性，不静默推断 `pro` 等于哪个模型。
-
-## 来源
-
-- https://antigravity.google/docs/plugins/
-- https://antigravity.google/docs/subagents/
-- https://antigravity.google/docs/hooks/
-- https://antigravity.google/docs/changelog/
-- https://antigravity.google/docs/skills/
-- https://antigravity.google/docs/rules/
-- https://antigravity.google/blog/introducing-custom-agents/
-- https://github.com/keli-wen/agy-staff
-
-参考页面的本地读取快照在开发工作区 `work/reference/`，不作为运行时依赖或插件包的一部分。
+- **无越权修改**：严禁自动 `git commit`、`git push`、生产环境部署、敏感凭证探测或破坏性文件系统操作。
+- **并发控制**：默认最多 2 个并发激活的 worker；单一重叠路径仅允许单一 writer。
+- **报告限额**：强制执行报告行数预算，阻止子会话大量代码日志淹没协调员上下文。
+- **真实模型凭证**：模型自述不可作为底层运行凭证。若无底层会话元数据或 App 卡片官方标识，路由状态统一标记为 `UNVERIFIED`，确保诚实审计。

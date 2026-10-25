@@ -1,6 +1,6 @@
 ---
 name: op-lead-with-us
-description: "在 Antigravity 内用 Opus 规划、Flash 调研/实现/审查的原生协作流程。用户要求节省 Opus 额度、委派实现或使用 op-lead-with-us 时使用。"
+description: "在 Antigravity 内用 Claude (Sonnet 4.6 / Opus 4.6 Thinking) 规划与验收、Flash 调研/实现/审查的原生协作流程。用户要求节省 Claude 额度、委派实现或使用 op-lead-with-us 时使用。"
 ---
 
 # OP Lead With Us
@@ -10,8 +10,9 @@ installed custom agents; it does not provide a model API, quota extension or CLI
 
 ## Activation
 
-1. The user selects the session model in the main conversation: Claude Opus 5.5
-   for planning/acceptance, Gemini 3.8 Flash for simple tasks and PLAN execution.
+1. The user selects the session model in the main conversation: Claude Sonnet 4.6
+   Thinking for everyday coordination, Claude Opus 4.6 Thinking for architectural
+   complexity / deep review, or Gemini 3.8 Flash for simple tasks and PLAN execution.
    Prefer `op-lead-with-us` as the primary agent. This skill cannot switch models.
 2. Confirm the installed worker definitions are available under their registered
    identifiers: `agy-researcher`, `agy-implementer`, `agy-reviewer`, all `flash`.
@@ -32,7 +33,7 @@ This skill cannot add tools to a conversation.
 
 Setup diagnosis may read only this plugin's manifest, lead definition, and
 researcher definition using the main agent's own read tools. It is not a forbidden
-Opus implementation fallback. If invocation is missing, report MISSING_INVOKE_TOOL
+Claude implementation fallback. If invocation is missing, report MISSING_INVOKE_TOOL
 and stop; if the named worker is not found, report WORKER_NOT_DISCOVERED. Do not
 substitute sending to a manually created chat for the requested automation.
 

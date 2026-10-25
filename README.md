@@ -8,19 +8,19 @@
 
 <p align="center">
   <a href="https://antigravity.google"><img src="https://img.shields.io/badge/platform-Google%20Antigravity-4285F4?style=flat-square&logo=google" alt="Antigravity"></a>
-  <img src="https://img.shields.io/badge/lead-Claude%20Opus%205.5-D97706?style=flat-square&logo=anthropic" alt="Claude Opus">
+  <img src="https://img.shields.io/badge/lead-Claude%20Sonnet%204.6%20%2F%20Opus%204.6%20Thinking-D97706?style=flat-square&logo=anthropic" alt="Claude Lead">
   <img src="https://img.shields.io/badge/workers-Gemini%203.8%20Flash-34A853?style=flat-square&logo=google" alt="Gemini Flash">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/dependencies-zero%20external-7C3AED?style=flat-square" alt="Zero Dependencies">
 </p>
 
 <p align="center">
-  <b>Hire Gemini Flash as staff for Claude Opus 5.5 — natively inside Google Antigravity.</b><br>
-  Opus plans, guides, and accepts. Flash explores, writes, and tests. Zero external CLI or proxies required.
+  <b>Hire Gemini 3.8 Flash as staff for Claude (Sonnet 4.6 / Opus 4.6 Thinking) — natively inside Google Antigravity.</b><br>
+  Claude plans, guides, and accepts. Gemini Flash explores, writes, and tests. Zero external CLI or third-party proxies required.
 </p>
 
 <p align="center">
-  <b><a href="#quick-start">Quick Start</a> · <a href="#why-op-lead-with-us">Why</a> · <a href="#roles">Roles</a> · <a href="#architecture">Architecture</a> · <a href="#license">License</a></b>
+  <b><a href="#quick-start">Quick Start</a> · <a href="#two-operating-modes">Operating Modes</a> · <a href="#roles">Roles</a> · <a href="#architecture">Architecture</a> · <a href="#license">License</a></b>
 </p>
 
 <p align="center">
@@ -33,32 +33,57 @@
 
 **`op-lead-with-us`** is an Antigravity-native multi-model orchestration plugin.
 
-Claude Opus 5.5 provides exceptional reasoning and system architecture skills, but consuming expensive Opus quota on repetitive repository exploration, continuous editing, and running unit tests is inefficient.
+Claude (Sonnet 4.6 Thinking and Opus 4.6 Thinking) provides industry-leading reasoning, system architecture, and review capabilities. However, consuming Claude quota on routine codebase exploration, repetitive line-by-line editing, and running unit tests rapidly depletes subscription allowances.
 
 This plugin establishes an automated division of labor directly inside Antigravity:
-* **Claude Opus 5.5 (Lead)** acts as the lead architect (`model: inherit`). It frames requirements, generates task packets, reviews findings, and makes final acceptance decisions.
-* **Gemini 3.8 Flash (Workers)** operate as background subagents (`model: flash`). They handle repository search, file modifications, test commands, and independent sanity reviews.
+* **Claude Coordinators (`model: inherit`)**:
+  - **Claude Sonnet 4.6 Thinking**: Recommended for standard daily coordination, task breakdown, delegation, and final acceptance. Fast, capable, and quota-efficient.
+  - **Claude Opus 4.6 Thinking**: Recommended for difficult architectural design, high-stakes system reviews, or complex multi-component refactors.
+* **Gemini 3.8 Flash Workers (`model: flash`)**:
+  - Three dedicated subagents handle all high-token workloads: codebase reconnaissance, editing files, running local test suites, and conducting independent verification.
 
 **Core Benefits:**
-* **Save Opus Quota**: Heavy token operations are offloaded to Flash; actual savings depend on the task mix.
-* **Zero External Dependencies**: Pure Antigravity native (`invoke_subagent`). No Node server, no Claude Code CLI, no external proxies.
-* **Context Preservation**: Test logs and file dumps remain isolated in worker subagent sessions.
+* **Preserve Claude Quota**: Heavy token operations (reading entire files, executing tests, debugging loops) are offloaded to Gemini 3.8 Flash.
+* **Zero External Dependencies**: Pure Antigravity native (`invoke_subagent`). No paid third-party API keys, no Claude Code CLI, no Codex CLI, no network proxies.
+* **Clean Context Window**: Routine test logs, terminal outputs, and file dumps remain isolated in worker subagent conversations.
+* **Deterministic Bounds**: Bounded concurrency (max 2 active workers), bounded repair budget (max 2 repair cycles), and strict report line limits (researcher ≤40, implementer ≤50, reviewer ≤60 lines).
 
-**Two-model policy & two-phase planning (v0.2.1):**
-* Session model is chosen in the Antigravity picker: **Claude Opus 5.5** for planning/acceptance conversations, **Gemini 3.8 Flash** for simple tasks and plan execution.
-* **Two-phase planning (`PLAN_ONLY`)**: an Opus conversation produces one compact `PLAN.md` (≤120 lines, transcribed by a single Flash implementer dispatch) and stops; a fresh Gemini 3.8 Flash conversation executes it with Flash workers. Opus never sees execution logs.
-* **Compressed evidence**: worker reports are capped (researcher 40 / implementer 50 / reviewer 60 lines); failing tests return a cause plus ≤15 output lines. Final acceptance uses the reviewer verdict, a diff summary, and test conclusions — never full re-reads.
+---
+
+<a name="two-operating-modes"></a>
+## Two Operating Modes
+
+### Mode A — Claude-Led Orchestration
+Claude remains the primary coordinator throughout the task.
+1. Claude receives the user prompt and establishes acceptance criteria.
+2. `agy-researcher` (Gemini Flash) surveys relevant interfaces and tests (read-only, ≤40 lines report).
+3. Claude drafts a compact plan and task packets.
+4. `agy-implementer` (Gemini Flash) writes/edits files using `write_to_file` / `replace_file_content` and runs tests via `run_command` (≤50 lines report).
+5. `agy-reviewer` (Gemini Flash) independently inspects git diffs and verifies tests (≤60 lines report).
+6. `agy-implementer` fixes confirmed defects within a strict budget of at most 2 repair cycles.
+7. Claude evaluates compact evidence summaries and makes the final acceptance decision.
+
+### Mode B — Quota-Saving Execution (`PLAN_ONLY`)
+Maximizes Claude quota conservation by separating planning from execution.
+1. In a Claude conversation, user requests `PLAN_ONLY <task description>`.
+2. Claude surveys minimally and generates a self-contained, durable implementation plan `PLAN.md` (≤120 lines).
+3. A single `agy-implementer` dispatch transcribes the verbatim plan into `PLAN.md` (or Claude prints it in chat). Claude does not implement or run tests.
+4. User opens a **fresh conversation** in Antigravity:
+   - Agent: `op-lead-with-us`
+   - Model: **Gemini 3.8 Flash**
+   - Prompt: `Execute PLAN.md`
+5. The Gemini Flash coordinator executes the plan using Gemini Flash subagents. Zero Claude tokens are spent during execution, debugging, or test verification.
 
 ---
 
 ## Roles
 
-| Persona | Identifier | Model | Permissions & Scope |
+| Persona | Identifier | Model Setting | Permissions & Scope |
 | :--- | :--- | :--- | :--- |
-| **Lead Architect** | `op-lead-with-us` | **Claude Opus 5.5** (`inherit`) | High-level planning, task breakdown, evidence evaluation, acceptance. No routine file edits. |
-| **Researcher** | `agy-researcher` | **Gemini Flash** (`flash`) | Read-only codebase reconnaissance, dependency mapping, finding interfaces. No code edits. |
-| **Implementer** | `agy-implementer` | **Gemini Flash** (`flash`) | Code editing, file replacement, test command execution. Max 2 self-repair cycles. |
-| **Reviewer** | `agy-reviewer` | **Gemini Flash** (`flash`) | Independent audit of git diffs and test logs against acceptance criteria. No writes. |
+| **Lead Architect** | `op-lead-with-us` | `inherit` (Claude Sonnet 4.6 / Opus 4.6) | High-level planning, task breakdown, evidence evaluation, acceptance. No direct file edits or test execution. |
+| **Researcher** | `agy-researcher` | `flash` (Gemini 3.8 Flash) | Read-only codebase reconnaissance, dependency mapping, finding interfaces. No code edits or shell execution. |
+| **Implementer** | `agy-implementer` | `flash` (Gemini 3.8 Flash) | Code creation (`write_to_file`), editing (`replace_file_content`), test execution (`run_command`). Max 2 repair cycles. |
+| **Reviewer** | `agy-reviewer` | `flash` (Gemini 3.8 Flash) | Independent audit of diffs, untracked files, and test reproduction against acceptance criteria. No code modifications. |
 
 ---
 
@@ -69,7 +94,7 @@ This plugin establishes an automated division of labor directly inside Antigravi
                               │
                               ▼
            ┌─────────────────────────────────────┐
-           │      Claude Opus 5.5 (Lead)         │
+           │      Claude 4.6 Coordinator         │
            │         op-lead-with-us             │
            │  Architecture, Plan, Task Packet    │
            └──────────────────┬──────────────────┘
@@ -77,35 +102,50 @@ This plugin establishes an automated division of labor directly inside Antigravi
          ┌────────────────────┼────────────────────┐
          ▼                    ▼                    ▼
   [ agy-researcher ]   [ agy-implementer ]   [ agy-reviewer ]
-   (Gemini Flash)       (Gemini Flash)       (Gemini Flash)
+   (Gemini 3.8 Flash)   (Gemini 3.8 Flash)   (Gemini 3.8 Flash)
    Read-only survey     Code edits & tests   Independent audit
 ```
 
 ---
 
+<a name="quick-start"></a>
 ## Quick Start
 
 ### 1. Install Globally (Machine-Wide)
 
-Clone the repository and install it to your user configuration directory:
+Clone your fork and run the safe global installer:
 
-```powershell
-git clone https://github.com/your-username/op-lead-with-us.git
+```bash
+git clone https://github.com/Hurbur/op-lead-with-us.git
 cd op-lead-with-us
 npm run install:global
 ```
 
-*(To uninstall: `npm run uninstall:global`)*
+*The installer automatically creates a timestamped backup before modifying any existing installation in `~/.gemini/config/plugins/` or `~/.gemini/config/agents/`.*
 
-### 2. Run in Antigravity
+To uninstall cleanly at any time:
+```bash
+npm run uninstall:global
+```
 
-1. Open or restart **Antigravity 2.0+**.
+### 2. Workspace-Local Staging (Alternative)
+
+If you prefer testing without modifying global settings:
+```bash
+npm run stage
+```
+This stages the plugin into `.agents/plugins/op-lead-with-us/` within your workspace.
+
+### 3. Run in Antigravity Desktop App
+
+1. Open or restart **Google Antigravity**.
 2. Start a **New Conversation** (`Ctrl+N`).
-3. Select **`op-lead-with-us`** in the Agent selector.
-4. Select **`Claude Opus 5.5`** (planning/acceptance) or **`Gemini 3.8 Flash`** (simple tasks / plan execution) in the Model selector.
-5. Send your coding request.
-
-The Lead will automatically coordinate Gemini Flash subagents in the background.
+3. In the **Agent selector**, choose **`op-lead-with-us`**.
+4. In the **Model selector**, choose your desired coordinator:
+   - **Claude Sonnet 4.6 Thinking**: Recommended for standard tasks, planning, and delegation.
+   - **Claude Opus 4.6 Thinking**: Recommended for complex architecture or deep review.
+   - **Gemini 3.8 Flash**: For Mode B (`Execute PLAN.md`) or simple tasks.
+5. Send your prompt and watch native subagent delegation in action!
 
 ---
 
@@ -113,30 +153,27 @@ The Lead will automatically coordinate Gemini Flash subagents in the background.
 
 The plugin includes an offline test suite validating schemas, model routing constraints, and staging safeguards:
 
-```powershell
-npm run validate   # Check manifest and agent declarations
-npm test           # Run the regression test suite
-npm run package    # Generate release ZIP with SHA256 checksum
+```bash
+npm run validate   # Check manifest, frontmatter, and agent declarations
+npm test           # Run 31 automated regression tests
+npm run package    # Generate release ZIP and SHA256 checksum
 ```
 
 ---
 
 ## FAQ
 
-* **Why Opus for planning and Flash for execution?**
-  Claude Opus 5.5 excels at high-level architecture and system reasoning, while routine codebase exploration, editing, and test execution consume heavy token quota. Offloading execution to Gemini 3.8 Flash preserves Opus quota while keeping responses fast.
+* **Why Sonnet 4.6 Thinking vs Opus 4.6 Thinking?**
+  Claude Sonnet 4.6 Thinking provides outstanding speed, nuanced reasoning, and lower quota burn, making it ideal for daily coordination. Claude Opus 4.6 Thinking is suited for rare, high-difficulty architectural dilemmas.
 
-* **What should I do if subagents do not appear or `MISSING_INVOKE_TOOL` is reported?**
-  Start a new conversation (`Ctrl+N`) and explicitly pick `op-lead-with-us` from the Agent selector dropdown rather than typing `/op-lead-with-us`. If `invoke_subagent` is still missing from the injected schema, restart Antigravity 2.0+ or verify your global installation.
+* **What should I do if `MISSING_INVOKE_TOOL` is reported?**
+  Start a new conversation (`Ctrl+N`) and explicitly pick `op-lead-with-us` from the Agent selector dropdown rather than typing `/op-lead-with-us`. If `invoke_subagent` is still missing from the schema, restart Antigravity or verify your global installation.
 
 * **How do I confirm workers really run on Gemini Flash?**
-  Worker configurations explicitly specify `model: flash`. However, because model self-identification in text is not proof of execution, routing status remains `UNVERIFIED` until runtime metadata or session logs confirm it.
-
-* **What is the `PLAN_ONLY` workflow?**
-  In an Opus conversation, send `PLAN_ONLY + task description`. The Lead produces a compact `PLAN.md` (≤120 lines transcribed verbatim by a single Flash implementer) and stops. You then open a fresh Gemini 3.8 Flash conversation and send `Execute PLAN.md`, ensuring execution logs never consume Opus quota.
+  Worker configurations explicitly specify `model: flash`. While the model self-reporting in prose is unverified, Antigravity's quota tracking and session card metadata verify that `flash` resolves to Gemini 3.8 Flash. If authoritative runtime metadata is unavailable in a child session, the report marks the model as `UNVERIFIED`.
 
 * **Does the plugin commit, push, or modify Git history automatically?**
-  No. All workers operate under strict boundaries with no automatic `git commit`, `git push`, deployment, or destructive operations. Any version control changes require explicit user authorization.
+  No. All roles operate under strict boundaries with no automatic `git commit`, `git push`, deployment, or destructive operations. Version control actions remain under explicit operator control.
 
 ---
 
@@ -147,54 +184,34 @@ npm run package    # Generate release ZIP with SHA256 checksum
 
 **`op-lead-with-us`** 是专为 **Google Antigravity** 设计的原生多模型协作插件。
 
-让 **Claude Opus 5.5** 负责高阶系统架构、需求拆解与最终验收，将繁重的高 Token 消耗操作（文件检索、代码修改、单元测试）交由毫秒级极速响应的 **Gemini 3.8 Flash** 子 Agent 执行。吉祥物为一只佩戴银色假面的智慧蓝章鱼，象征以多爪多线程从容调度多模型。
+让 **Claude (Sonnet 4.6 / Opus 4.6 Thinking)** 负责顶层系统架构、需求拆解与最终验收，将高 Token 消耗的繁重操作（代码检索、文件编辑、测试运行与纠错）全面交由极速、低成本的 **Gemini 3.8 Flash** 子 Agent 原生并发执行。
 
 ### 为什么选择它？
 
-* **双模型策略（v0.2.1）**：复杂规划/验收选 Opus 5.5；简单任务与执行阶段选 Gemini 3.8 Flash。
-* **两阶段规划**：`PLAN_ONLY` 让 Opus 产出紧凑 PLAN.md（由一次 implementer 原文转写）；新开 Flash 会话 `Execute PLAN.md`，Opus 不看执行日志。
-* **压缩回报**：worker 回报限长（40/50/60 行），Lead 只依据摘要与 diff 摘要验收，重活大部分转嫁给 Flash。
-* **原生免配**：不依赖 Claude Code、Codex、agy CLI 或任何第三方网络代理，直接利用 Antigravity 官方子 Agent（`invoke_subagent`）机制。
-* **干净的上下文**：大量生成的代码和终端测试日志留在子会话中，主对话上下文始终保持精简。
-
-### 角色分工
-
-* **`op-lead-with-us` (Opus 5.5)**：主架构师。拆解任务包，监督执行，最终验收，不亲自敲碎代码。
-* **`agy-researcher` (Gemini Flash)**：只读调研员。毫秒级探查接口与现有架构，严禁修改文件。
-* **`agy-implementer` (Gemini Flash)**：执行员。负责文件编写、替换并运行本地测试命令，限定 2 轮自主修复上限。
-* **`agy-reviewer` (Gemini Flash)**：独立审查员。核对变更 Diff 与测试证据，杜绝越权修改。
+* **精准模型分工**：
+  - **Claude Sonnet 4.6 Thinking**：日常首选主协调员，推理敏捷、拆解精准、额度消耗亲民。
+  - **Claude Opus 4.6 Thinking**：高难度架构决策与高阶代码审查。
+  - **Gemini 3.8 Flash**：子任务执行员，负责实质调研、写代码、跑测试与独立复查。
+* **两种运行模式**：
+  - **模式 A（Claude 主导全流程）**：Claude 全程协调，仅通过精简任务包委派，不读大文件、不亲自跑测试。
+  - **模式 B（极省额度两阶段 `PLAN_ONLY`）**：Claude 产出 `PLAN.md`（≤120 行）后会话终止；新开 Gemini 3.8 Flash 会话执行 `Execute PLAN.md`，执行期零 Claude 消耗。
+* **原生免配**：不依赖外部 Claude Code CLI、Codex CLI、第三方代理或付费 API，完全基于 Antigravity 官方原生子 Agent（`invoke_subagent`）与生命周期管理机制。
+* **严格安全界限**：默认最多 2 个并发 worker、单路径单一 writer、最多 2 轮自主修复上限、精简汇报行数预算（40/50/60 行）。
 
 ### 快速上手
 
-```powershell
-# 1. 全局安装
-git clone https://github.com/your-username/op-lead-with-us.git
+```bash
+# 1. 全局安装（含自动备份现有配置）
+git clone https://github.com/Hurbur/op-lead-with-us.git
 cd op-lead-with-us
 npm run install:global
 
 # 2. 在 Antigravity 桌面端
 # - 新建会话 (Ctrl+N)
 # - Agent 选择器选择: op-lead-with-us
-# - 模型选择器选择: Claude Opus 5.5
+# - 模型选择器按需选择: Claude Sonnet 4.6 Thinking 或 Claude Opus 4.6 Thinking
 # - 开始对话！
 ```
-
-### 常见问题
-
-* **为什么采用 Opus 规划、Flash 执行的分工？**
-  Claude Opus 5.5 具备优秀的顶层架构与系统推理能力，但用于日常代码检索、文件编辑与测试执行极耗额度。将高 Token 消耗的执行任务交给极速响应的 Gemini 3.8 Flash，既能节省核心额度，又能大幅提升执行效率。
-
-* **子 Agent 未触发或提示 `MISSING_INVOKE_TOOL` 怎么办？**
-  请新建会话（`Ctrl+N`）并在 Antigravity 主界面的 Agent 下拉选择框中**显式选中 `op-lead-with-us`**（而非仅在输入框输入 `/op-lead-with-us`）。若仍缺少 `invoke_subagent` 工具，请重启 Antigravity 或重新运行全局安装。
-
-* **如何确认子任务确实运行在 Gemini Flash 上？**
-  子 Agent 配置均显式绑定 `model: flash`。但由于模型文本自述不可作为底层运行凭证，在客户端或会话元数据正式呈现运行模型前，路由状态均保持为 `UNVERIFIED`。
-
-* **什么是 `PLAN_ONLY` 两阶段工作流？**
-  在 Opus 会话中发送 `PLAN_ONLY + 任务描述`，Lead 仅产出一份紧凑的 `PLAN.md`（不超过 120 行，由一次 implementer 原文转写）即终止；随后新开 Gemini 3.8 Flash 会话发送 `Execute PLAN.md` 执行，彻底避免执行期终端日志消耗 Opus 额度。
-
-* **插件会自动提交（git commit）或推送（git push）代码吗？**
-  不会。所有角色均遵循严格的行为边界，严禁自动执行 `git commit`、`git push`、部署或任何破坏性操作，代码版本变更必须由用户明确授权。
 
 ---
 
@@ -202,7 +219,6 @@ npm run install:global
 
 本项目首发并活跃于 **[LINUX DO](https://linux.do)** 技术社区：
 - **论坛交流**：[LINUX DO (https://linux.do)](https://linux.do)
-- **社区探讨**：欢迎前往 LINUX DO 社区参与 Doloris 的长任务无人值守经验交流、架构探讨与 BYOP 自定义桌宠皮肤分享！
 - **社区精神**：*真诚、友善、团结、专业*，共建高品质技术社区。
 
 ---

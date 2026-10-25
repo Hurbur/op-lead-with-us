@@ -1,4 +1,4 @@
 {
   "name": "op-lead-with-us",
-  "description": "Antigravity-native two-model orchestration: Claude Opus 5.5 plans and accepts; Gemini 3.8 Flash researches, implements, and reviews."
+  "description": "Antigravity-native multi-agent orchestration: Claude (Sonnet 4.6 / Opus 4.6 Thinking) coordinates and accepts; Gemini 3.8 Flash researches, implements, and reviews."
 }
