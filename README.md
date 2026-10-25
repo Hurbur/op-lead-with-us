@@ -175,6 +175,9 @@ npm run package    # Generate release ZIP and SHA256 checksum
 * **Does the plugin commit, push, or modify Git history automatically?**
   No. All roles operate under strict boundaries with no automatic `git commit`, `git push`, deployment, or destructive operations. Version control actions remain under explicit operator control.
 
+* **Why is native `/goal` missing from the slash command menu when `op-lead-with-us` is selected?**
+  In Antigravity (v2.21.1), native `/goal` activation (including the "Active Goal" UI indicator, continuation prompts, and completion tracking) is gated inside the language server (`cortex/slashcommands` predicate at `0x6a79dc0` and `agentexecutor.ConstructEnvLowLevel` at `0x6c32b50`) by a check requiring `"goal_stop"` in `CustomAgentConfig.StopHooks`. Antigravity injects `"goal_stop"` exclusively for built-in baseline agents (`config.getBaselineConfig`), while custom Markdown agents (`ParseAgentScriptItemFromMarkdown`) have no host frontmatter mapping for Go stop hooks. Per project invariants, native `/goal` is not replaced with a shadowing prompt imitation skill; for extended unattended execution, run native `/goal` in the default agent or use Mode B (`PLAN_ONLY`).
+
 ---
 
 <a name="-简体中文"></a>
@@ -212,6 +215,11 @@ npm run install:global
 # - 模型选择器按需选择: Claude Sonnet 4.6 Thinking 或 Claude Opus 4.6 Thinking
 # - 开始对话！
 ```
+
+### 常见问题
+
+* **为什么选择 `op-lead-with-us` 时斜杠命令菜单中没有原生的 `/goal`？**
+  在 Antigravity (v2.21.1) 架构中，原生 `/goal` 功能（包含 Active Goal 界面指示器、停止拦截、强行继续与完成审计）受 Language Server 内部逻辑硬性门控（`cortex/slashcommands` 判定函数位于 `0x6a79dc0`，执行器挂载位于 `0x6c32b50`）。该门控要求当前 Agent 配置的 `CustomAgentConfig.StopHooks` 中必须包含 Go 内部 Hook `"goal_stop"`。Antigravity 目前仅对内置默认 Agent（`config.getBaselineConfig`）注入该 Hook，自定义 Markdown Agent 语法（`ParseAgentScriptItemFromMarkdown`）暂无映射内部 StopHooks 的原生字段。为保持架构纯洁性，本项目坚决不采用同名伪 Skill 模拟或二进制篡改；如需长时间无人值守任务，建议在默认 Agent 会话中使用 `/goal`，或使用模式 B（`PLAN_ONLY`）执行。
 
 ---
 
